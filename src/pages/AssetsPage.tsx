@@ -56,7 +56,7 @@ function AssetRow({ asset, currency }: { asset: Asset; currency: string }) {
             onClick={() => navigate(`/assets/${asset.id}/model`)}
             style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 1.2fr 1fr 1fr 0.8fr 0.8fr auto auto auto',
+                gridTemplateColumns: '2.5fr 1.2fr 0.9fr 0.9fr 0.9fr 0.7fr auto auto',
                 alignItems: 'center',
                 gap: '1rem',
                 padding: '0.875rem 1.25rem',
@@ -238,12 +238,12 @@ function CategorySection({
                     {/* Table header */}
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: '2fr 1.2fr 1fr 1fr 0.8fr 0.8fr auto',
+                        gridTemplateColumns: '2.5fr 1.2fr 0.9fr 0.9fr 0.9fr 0.7fr auto auto',
                         gap: '1rem',
                         padding: '0.625rem 1.25rem',
                         background: 'var(--black-850)',
                     }}>
-                        {['Activo', 'Valoración DCF', 'Ingresos/año', 'EBITDA/NOI', 'Patrimonio neto', 'Confianza', ''].map((h, i) => (
+                        {['Activo', 'Valoración DCF', 'Ingresos/año', 'EBITDA/NOI', 'Patrimonio neto', 'Confianza', '', ''].map((h, i) => (
                             <div key={i} style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                                 {h}
                             </div>
@@ -356,12 +356,12 @@ function RealEstateSection({ assets, currency }: { assets: Asset[]; currency: st
                                 {/* Table header */}
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: '2fr 1.2fr 1fr 1fr 0.8fr 0.8fr auto',
+                                    gridTemplateColumns: '2.5fr 1.2fr 0.9fr 0.9fr 0.9fr 0.7fr auto auto',
                                     gap: '1rem',
                                     padding: '0.5rem 1.25rem',
                                     background: 'var(--black-900)',
                                 }}>
-                                    {['Activo', 'Valoración', 'Ingresos/año', 'NOI', 'Patrimonio neto', 'Confianza', ''].map((h, i) => (
+                                    {['Activo', 'Valoración', 'Ingresos/año', 'NOI', 'Patrimonio neto', 'Confianza', '', ''].map((h, i) => (
                                         <div key={i} style={{ fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{h}</div>
                                     ))}
                                 </div>

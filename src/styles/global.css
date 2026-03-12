@@ -191,6 +191,7 @@ a:hover { color: var(--blue-500); }
 .page-content {
   padding: 2.5rem;
   max-width: 1400px;
+  margin: 0 auto;
 }
 
 /* ============================================================
