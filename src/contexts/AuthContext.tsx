@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import type { Profile } from '../types'
 
 // ── Demo credentials (auto-login so RLS works) ──────────────
-const DEMO_EMAIL = 'demo@gestpatrimonio.com'
+const DEMO_EMAIL = 'propietario@gestpatrimonio.com'
 const DEMO_PASSWORD = 'Demo123!'
 // ─────────────────────────────────────────────────────────────
 
