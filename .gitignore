@@ -23,3 +23,5 @@ npm-debug.log*
 
 # Temp files
 *.tmp
+
+.vercel

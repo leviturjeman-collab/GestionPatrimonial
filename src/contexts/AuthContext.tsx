@@ -3,16 +3,9 @@ import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types'
 
-// ── DEMO bypass: use real seeded user without login ──────────
-const DEMO_USER_ID = '702dda83-031a-4df7-b0cf-b5e4b99c03b5'
-const DEMO_USER = {
-    id: DEMO_USER_ID,
-    email: 'demo@gestpatrimonio.com',
-    app_metadata: {},
-    user_metadata: { full_name: 'Propietario' },
-    aud: 'authenticated',
-    created_at: '',
-} as unknown as User
+// ── Demo credentials (auto-login so RLS works) ──────────────
+const DEMO_EMAIL = 'demo@gestpatrimonio.com'
+const DEMO_PASSWORD = 'Demo123!'
 // ─────────────────────────────────────────────────────────────
 
 interface AuthContextType {
@@ -29,7 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<User | null>(DEMO_USER)   // start with demo user
+    const [user, setUser] = useState<User | null>(null)
     const [session, setSession] = useState<Session | null>(null)
     const [profile, setProfile] = useState<Profile | null>(null)
     const [loading, setLoading] = useState(true)
@@ -43,18 +36,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(data as Profile | null)
     }
 
+    const autoSignIn = async () => {
+        // Auto-login with demo user so RLS works
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: DEMO_EMAIL,
+            password: DEMO_PASSWORD,
+        })
+        if (!error && data.session) {
+            setSession(data.session)
+            setUser(data.session.user)
+            await loadProfile(data.session.user.id)
+        }
+        setLoading(false)
+    }
+
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user) {
                 setSession(session)
                 setUser(session.user)
                 loadProfile(session.user.id)
+                setLoading(false)
             } else {
-                // No session → use demo user
-                setUser(DEMO_USER)
-                loadProfile(DEMO_USER_ID)
+                // No session → auto-sign-in with demo user
+                autoSignIn()
             }
-            setLoading(false)
         })
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -63,8 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(session.user)
                 loadProfile(session.user.id)
             } else {
-                setUser(DEMO_USER)
-                loadProfile(DEMO_USER_ID)
+                setUser(null)
                 setProfile(null)
             }
         })
@@ -87,8 +92,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signOut = async () => {
         await supabase.auth.signOut()
-        setUser(DEMO_USER)
-        loadProfile(DEMO_USER_ID)
+        // Re-login as demo
+        await autoSignIn()
     }
 
     const refreshProfile = async () => {
