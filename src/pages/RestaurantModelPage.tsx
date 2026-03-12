@@ -123,7 +123,11 @@ function computeModel(inp: Inputs, scen: Scenario = 'base') {
     const mktR = pct(inp.marketingRate)
     const daR = pct(inp.daRate)
     const rentEsc = pct(inp.rentEscalation)
-    const rentBase = num(inp.annualRent)
+    const rentBase = inp.regime === 'owned' ? 0 : num(inp.annualRent)
+    // Owned property costs (IBI + insurance + community) — replaces rent
+    const ownedPropertyCosts = inp.regime === 'owned'
+        ? num(inp.ibiAnnual) + num(inp.buildingInsurance) + num(inp.communityFees)
+        : 0
     const utils = num(inp.utilsFixed)
     const fixed = num(inp.otherFixed)
     const mCapex = num(inp.maintenanceCapex)
@@ -157,10 +161,11 @@ function computeModel(inp: Inputs, scen: Scenario = 'base') {
         const gp = rev - cogs
         const staff = rev * staffR
         const rent = rentBase * Math.pow(1 + rentEsc, y)
+        const propCosts = ownedPropertyCosts * Math.pow(1 + inflacion, y)
         const mkt = rev * mktR
         const Utils = utils * Math.pow(1 + inflacion, y)
         const Fixed = fixed * Math.pow(1 + inflacion, y)
-        const ebitda = gp - staff - rent - mkt - Utils - Fixed
+        const ebitda = gp - staff - rent - propCosts - mkt - Utils - Fixed
         const da = rev * daR
         const ebit = ebitda - da
         const tax = Math.max(ebit * taxR, 0)
@@ -183,9 +188,14 @@ function computeModel(inp: Inputs, scen: Scenario = 'base') {
     const pvTV = tvRaw / Math.pow(1 + wacc, H)
 
     const ev = pvFCFs + pvTV
-    const equityValue = (ev - num(inp.debtOutstanding) + num(inp.cash)) * (pct(inp.ownershipPct) / 100)
+    // For owned: also subtract mortgage principal from EV to get equity
+    const totalDebt = inp.regime === 'owned'
+        ? num(inp.debtOutstanding) + num(inp.mortgagePrincipal)
+        : num(inp.debtOutstanding)
+    const equityValue = (ev - totalDebt + num(inp.cash)) * (pct(inp.ownershipPct) / 100)
+    const debtToEquity = equityValue > 0 ? totalDebt / equityValue : 0
 
-    return { years, waccResult, wacc, pvFCFs, pvTV, tvRaw, ev, equityValue, revBase, revSala, revDelivery, revDeliveryGross, totalDeliveryCommissions, totalDeliveryOrders, ue, gl, g }
+    return { years, waccResult, wacc, pvFCFs, pvTV, tvRaw, ev, equityValue, revBase, revSala, revDelivery, revDeliveryGross, totalDeliveryCommissions, totalDeliveryOrders, ue, gl, g, debtToEquity, totalDebt, ownedPropertyCosts }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -490,16 +500,31 @@ export default function RestaurantModelPage({ asset }: { asset: Asset }) {
                         <InputCell label="Capital hipoteca pendiente" value={inp.mortgagePrincipal} onChange={set('mortgagePrincipal')} unit="€" hint="Importe principal pendiente de amortizar. Se resta del EV para calcular Equity Value." />
                         <InputCell label="Tipo interés hipoteca" value={inp.mortgageRate} onChange={set('mortgageRate')} unit="%" hint="Tipo de interés anual del préstamo hipotecario. Fijo o Euribor + spread." />
                         <InputCell label="Años restantes hipoteca" value={inp.mortgageYears} onChange={set('mortgageYears')} unit="años" hint="Vida residual del préstamo. Se usa para calcular el servicio de deuda anual." />
-                        <div style={{ gridColumn: 'span 3', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, padding: '0.75rem 1rem', fontSize: '0.8rem', color: BLUE_CLR }}>
+
+                        {/* D/E Ratio + Equity Weight auto-calculation */}
+                        <div style={{ gridColumn: 'span 3', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', padding: '1rem', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10 }}>
                             {(() => {
                                 const P = num(inp.mortgagePrincipal), r = pct(inp.mortgageRate) / 12, n = num(inp.mortgageYears) * 12
                                 const monthly = n > 0 && r > 0 ? P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : 0
-                                const propVal = num(inp.purchasePrice) * Math.pow(1 + pct(inp.propAppreciation), parseInt(inp.horizon) || 7)
+                                const propVal = num(inp.purchasePrice)
+                                const ltv = propVal > 0 ? (P / propVal) * 100 : 0
+                                const equityPct = 100 - ltv
+                                const de = baseModel.debtToEquity
                                 return <>
-                                    <strong>Cuota hipoteca mensual:</strong> {monthly > 0 ? `${monthly.toFixed(0)} €/mes (${(monthly * 12).toFixed(0)} €/año)` : 'Sin financiación'}&nbsp;&nbsp;
-                                    <strong>Valor estimado inmueble en {inp.horizon}a:</strong> {(num(inp.purchasePrice) * Math.pow(1 + pct(inp.propAppreciation), parseInt(inp.horizon) || 7)).toLocaleString('es-ES', { maximumFractionDigits: 0 })} € (+{fmtPct(Math.pow(1 + pct(inp.propAppreciation), parseInt(inp.horizon) || 7) - 1)})
+                                    <FormulaCell label="Cuota hipoteca" value={monthly > 0 ? `${monthly.toFixed(0)} €/mes` : 'Sin financiación'} formula={monthly > 0 ? `${(monthly * 12).toFixed(0)} €/año servicio deuda` : ''} />
+                                    <FormulaCell label="LTV (Loan-to-Value)" value={`${ltv.toFixed(1)}%`} formula={`Hipoteca ${fmtEur(P)} / Inmueble ${fmtEur(propVal)}`} />
+                                    <OutputCell label="Debt / Equity Ratio" value={`${de.toFixed(2)}×`} sub={de > 2 ? '⚠️ Apalancamiento alto' : de > 1 ? '⚡ Moderado' : '✅ Conservador'} />
+                                    <FormulaCell label="Valor inmueble en " value={fmtEur(num(inp.purchasePrice) * Math.pow(1 + pct(inp.propAppreciation), parseInt(inp.horizon) || 7))} formula={`+${fmtPct(Math.pow(1 + pct(inp.propAppreciation), parseInt(inp.horizon) || 7) - 1)} en ${inp.horizon} años`} />
                                 </>
                             })()}
+                        </div>
+
+                        {/* Property costs summary for owned */}
+                        <div style={{ gridColumn: 'span 3', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', padding: '1rem', background: 'rgba(201,164,78,0.06)', border: '1px solid rgba(201,164,78,0.25)', borderRadius: 10 }}>
+                            <FormulaCell label="Costes propiedad / año" value={fmtEur(num(inp.ibiAnnual) + num(inp.buildingInsurance) + num(inp.communityFees))} formula="IBI + Seguro + Comunidad (reemplazan alquiler)" />
+                            <FormulaCell label="D&A edificio / año" value={fmtEur(num(inp.purchasePrice) * pct(inp.buildingDA))} formula={`${inp.purchasePrice}€ × ${inp.buildingDA}%`} />
+                            <FormulaCell label="Coste compra total" value={fmtEur(num(inp.purchasePrice))} formula={inp.purchasePrice ? 'Precio adquisición' : 'No especificado'} />
+                            <OutputCell label="Equity en propiedad" value={fmtEur(Math.max(num(inp.purchasePrice) - num(inp.mortgagePrincipal), 0))} sub={`${num(inp.purchasePrice) > 0 ? ((1 - num(inp.mortgagePrincipal) / num(inp.purchasePrice)) * 100).toFixed(0) : '100'}% del inmueble`} />
                         </div>
                     </>)}
 
@@ -588,8 +613,15 @@ export default function RestaurantModelPage({ asset }: { asset: Asset }) {
                     <SectionHeader title="Estructura de Costes" color={BLUE_CLR} />
                     <InputCell label="COGS / Food cost" value={inp.cogsRate} onChange={set('cogsRate')} unit="% ventas" hint="Coste de materias primas como % de ventas. Típico hostelería: 25–35%." />
                     <InputCell label="Coste personal" value={inp.staffRate} onChange={set('staffRate')} unit="% ventas" hint="Salarios, SS, formación, ETTs. Típico: 28–38% ventas." />
-                    <InputCell label="Alquiler anual" value={inp.annualRent} onChange={set('annualRent')} unit="€/año" hint={inp.regime === 'leased' ? 'Renta contractual. 0 si local propio.' : 'Local propio. Introduce 0 o coste de oportunidad.'} />
-                    <InputCell label="Escalada alquiler (IPC)" value={inp.rentEscalation} onChange={set('rentEscalation')} unit="%" hint="Subida anual contractual del alquiler. Típico: CPI ~2-3%." />
+                    {inp.regime === 'leased' && (<>
+                        <InputCell label="Alquiler anual" value={inp.annualRent} onChange={set('annualRent')} unit="€/año" hint="Renta contractual del local arrendado." />
+                        <InputCell label="Escalada alquiler (IPC)" value={inp.rentEscalation} onChange={set('rentEscalation')} unit="%" hint="Subida anual contractual del alquiler. Típico: CPI ~2-3%." />
+                    </>)}
+                    {inp.regime === 'owned' && (
+                        <div style={{ gridColumn: 'span 2', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, padding: '0.75rem 1rem', fontSize: '0.8rem', color: '#22c55e' }}>
+                            <strong>🏠 Local propio — sin alquiler.</strong> Costes de propiedad (IBI {fmtEur(num(inp.ibiAnnual))} + Seguro {fmtEur(num(inp.buildingInsurance))} + Comunidad {fmtEur(num(inp.communityFees))}) = <strong>{fmtEur(num(inp.ibiAnnual) + num(inp.buildingInsurance) + num(inp.communityFees))}/año</strong> incluidos en el modelo.
+                        </div>
+                    )}
                     <InputCell label="Marketing y publicidad" value={inp.marketingRate} onChange={set('marketingRate')} unit="% ventas" hint="Redes sociales, plataformas delivery, Google Ads." />
                     <InputCell label="Suministros y utilities" value={inp.utilsFixed} onChange={set('utilsFixed')} unit="€/año" hint="Luz, agua, gas, Internet, limpieza." />
                     <InputCell label="Otros gastos fijos" value={inp.otherFixed} onChange={set('otherFixed')} unit="€/año" hint="Seguros, gestoría, licencias, software TPV, etc." />
