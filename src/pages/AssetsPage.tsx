@@ -49,7 +49,13 @@ function AssetRow({ asset, currency }: { asset: Asset; currency: string }) {
     const debt = asset.total_debt ?? 0
     const equity = Math.max((v?.value_base ?? 0) - debt, 0)
     const revenue = Number(sd?.annual_revenue ?? sd?.annual_rent_income ?? 0)
-    const ebitda = Number(sd?.ebitda_pct ? Number(sd.annual_revenue) * Number(sd.ebitda_pct) / 100 : 0)
+    const ebitda = Number(
+        sd?.ebitda ??
+        (sd?.ebitda_pct ? Number(sd.annual_revenue) * Number(sd.ebitda_pct) / 100 : null) ??
+        (v?.assumptions_metadata as Record<string, unknown>)?.ebitda ??
+        (v?.assumptions_metadata as Record<string, unknown>)?.noi ??
+        0
+    )
 
     return (
         <div

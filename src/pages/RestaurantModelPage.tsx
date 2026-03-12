@@ -327,6 +327,7 @@ export default function RestaurantModelPage({ asset }: { asset: Asset }) {
         if (!user) return
         setSaving(true)
         const m = baseModel
+        const year1 = m.years[0]
         await supabase.from('patrimonio_assets').update({
             sector_data: {
                 ...sd,
@@ -337,7 +338,51 @@ export default function RestaurantModelPage({ asset }: { asset: Asset }) {
                 cogs_pct: num(inp.cogsRate), staff_pct: num(inp.staffRate),
                 area_sqm: num(inp.areaSqm), revenue_growth_pct: num(inp.revGrowth),
                 discount_rate_pct: m.wacc * 100, debt_outstanding: num(inp.debtOutstanding),
-                opening_year: inp.openingYear,
+                opening_year: inp.openingYear, staff_count: num(inp.numEmpleados),
+                categoria_local: inp.categoriaLocal,
+                // Delivery
+                uber_eats_active: inp.uberEatsActive, uber_eats_orders_month: num(inp.uberEatsOrdersMonth),
+                uber_eats_ticket: num(inp.uberEatsTicket), uber_eats_commission: num(inp.uberEatsCommission),
+                glovo_active: inp.glovoActive, glovo_orders_month: num(inp.glovoOrdersMonth),
+                glovo_ticket: num(inp.glovoTicket), glovo_commission: num(inp.glovoCommission),
+                packaging_cost_per_order: num(inp.packagingCostPerOrder),
+                // Cost structure
+                marketing_rate: num(inp.marketingRate), utils_fixed: num(inp.utilsFixed),
+                other_fixed: num(inp.otherFixed), rent_escalation: num(inp.rentEscalation),
+                // CAPEX & D&A
+                maintenance_capex: num(inp.maintenanceCapex), expansion_capex: num(inp.expansionCapex),
+                da_rate: num(inp.daRate),
+                // Working capital
+                ar_days: num(inp.arDays), inventory_days: num(inp.inventoryDays), ap_days: num(inp.apDays),
+                // Macro
+                inflacion: num(inp.inflacion),
+                // WACC / CAPM
+                rf: num(inp.rf), erp: num(inp.erp), beta: num(inp.beta),
+                crp: num(inp.crp), size_premium: num(inp.sizePremium),
+                debt_cost: num(inp.debtCost), tax_rate: num(inp.taxRate),
+                equity_weight: num(inp.equityWeight), cash: num(inp.cash),
+                // Leased
+                lease_start: inp.leaseStart, lease_expiry: inp.leaseExpiry,
+                deposit_months: num(inp.depositMonths), lease_renewable: inp.leaseRenewable,
+                rent_review_type: inp.rentReviewType, rent_free_months: num(inp.rentFreeMonths),
+                break_clause: inp.breakClause, leasehold_capex: num(inp.leaseholdCapex),
+                leasehold_amort_years: num(inp.leaseholdAmortYears),
+                // Owned
+                purchase_price: num(inp.purchasePrice), ibi_annual: num(inp.ibiAnnual),
+                building_insurance: num(inp.buildingInsurance), community_fees: num(inp.communityFees),
+                mortgage_principal: num(inp.mortgagePrincipal), mortgage_rate: num(inp.mortgageRate),
+                mortgage_years: num(inp.mortgageYears), prop_appreciation: num(inp.propAppreciation),
+                building_da: num(inp.buildingDA),
+                // Terminal value
+                terminal_growth: num(inp.terminalGrowth), ebitda_multiple: num(inp.ebitdaMultiple),
+                tv_method: inp.tvMethod,
+                // Projection
+                horizon: num(inp.horizon), ownership_pct: num(inp.ownershipPct),
+                otros_ingresos: num(inp.otrosIngresos),
+                // Computed (for display in assets list)
+                annual_revenue: Math.round(year1?.rev ?? 0),
+                ebitda: Math.round(year1?.ebitda ?? 0),
+                ebitda_pct: year1 ? Math.round(year1.ebitdaMargin * 100) : 0,
             }
         }).eq('id', asset.id)
 
@@ -348,9 +393,19 @@ export default function RestaurantModelPage({ asset }: { asset: Asset }) {
             value_base: Math.round(m.equityValue),
             value_high: Math.round(computeModel(inp, 'optimistic').equityValue),
             method_used: 'dcf', confidence_score: 'high',
-            drivers: m.waccResult.details.breakdown.map(b => `${b.label}: ${fmtPct(b.value)}`),
-            explanation: `Modelo DCF completo. WACC ${fmtPct(m.wacc)}. EV ${fmtEur(m.ev)}.`,
-            assumptions_metadata: { wacc: m.wacc, ev: m.ev, pvFCFs: m.pvFCFs, pvTV: m.pvTV },
+            drivers: [
+                `Revenue: ${fmtEur(year1?.rev ?? 0)}`,
+                `EBITDA: ${fmtEur(year1?.ebitda ?? 0)} (${fmtPct(year1?.ebitdaMargin ?? 0)})`,
+                `WACC: ${fmtPct(m.wacc)}`,
+                `FCF: ${fmtEur(year1?.fcf ?? 0)}`,
+            ],
+            explanation: `Modelo DCF completo. Revenue ${fmtEur(year1?.rev ?? 0)}. EBITDA ${fmtEur(year1?.ebitda ?? 0)} (${fmtPct(year1?.ebitdaMargin ?? 0)}). WACC ${fmtPct(m.wacc)}. EV ${fmtEur(m.ev)}.`,
+            assumptions_metadata: {
+                wacc: m.wacc, ev: m.ev, pvFCFs: m.pvFCFs, pvTV: m.pvTV,
+                revenue: year1?.rev ?? 0, ebitda: year1?.ebitda ?? 0,
+                ebitdaMargin: year1?.ebitdaMargin ?? 0, fcf: year1?.fcf ?? 0,
+                noi: year1?.ebitda ?? 0,
+            },
         })
         setSaving(false)
         navigate('/assets')
